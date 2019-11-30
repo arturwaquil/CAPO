@@ -23,9 +23,9 @@ def clearLines(lines):
 
 	return newLines
 
-# GABARITO
+''' GABARITO '''
 
-gabOrig = cv2.imread('imgs/word.png')
+gabOrig = cv2.imread('imgs/print1.png')
 gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY)
 gabCanny = cv2.Canny(gabGrey, 100, 200) # TODO: params
 # _, gabThres = cv2.threshold(gabGrey, 140, 255, cv2.THRESH_BINARY_INV)
@@ -35,9 +35,9 @@ gabCanny = cv2.Canny(gabGrey, 100, 200) # TODO: params
 
 imshow("canny", gabCanny)
 
-lines = cv2.HoughLines(gabCanny, 1, 3*np.pi/180, 200)	# TODO: params
+lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 150)	# TODO: params
 lines = clearLines(lines)
-# print(lines)
+
 # lines[0] -> primeira linha
 # lines[i][0] -> d
 # lines[i][1] -> theta
@@ -52,9 +52,47 @@ for line in lines:
 		horLines.append(line)
 
 verLines.sort(key = lambda line: abs(line[0]))
-# [ print(i) for i in verLines ]
 horLines.sort(key = lambda line: abs(line[0]))
 
+# Eliminacao de linhas duplicadas e da primeira linha e primera coluna (para nao ler as questoes e as alternativas)
+dist_min_etre_linhas = 5
+
+horLinesAux = []
+for i in range (1,len(horLines)):
+	if abs(horLines[i][0] - horLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
+		horLinesAux.append(horLines[i])
+horLines = horLinesAux
+		
+verLinesAux = []
+for i in range (1,len(verLines)):
+	if abs(verLines[i][0] - verLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
+		verLinesAux.append(verLines[i])		
+verLines = verLinesAux
+		
+# Identificacao da tabela (intersecoes entre linhas)
+tabela = []
+
+for linha in horLines:
+	intersecoes = []
+	d1 = linha[0]
+	t1 = linha[1]
+	for coluna in verLines:
+		d2 = coluna[0]
+		t2 = coluna[1]
+		A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
+		b = np.asmatrix([[d1],[d2]])
+		coord = np.linalg.inv(A) * b
+		intersecoes.append(coord)
+	tabela.append(intersecoes)
+
+''' Print intersecoes '''
+#for i in range(len(horLines)):			
+#	for j in range(len(verLines)):
+#		coord = tabela[i][j] 
+#		cv2.circle(gabOrig, (coord[0], coord[1]), 5, (0,255,0))
+
+
+''' Print linhas '''
 for line in verLines:
 	d = line[0]
 	theta = line[1]
