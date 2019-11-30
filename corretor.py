@@ -82,6 +82,7 @@ for linha in horLines:
 		A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
 		b = np.asmatrix([[d1],[d2]])
 		coord = np.linalg.inv(A) * b
+		coord.resize(2)
 		intersecoes.append(coord)
 	tabela.append(intersecoes)
 
@@ -91,6 +92,33 @@ for linha in horLines:
 #		coord = tabela[i][j] 
 #		cv2.circle(gabOrig, (coord[0], coord[1]), 5, (0,255,0))
 
+
+# Monta o gabarito
+gabarito = []
+for coluna in range(len(verLines)-1):
+	resposta = -1
+	mediaCor_resposta = 255
+
+	for linha in range(len(horLines)-1):
+		coord_sup_esq = tabela[linha][coluna]
+		coord_inf_dir = tabela[linha+1][coluna+1]
+		sum = 0
+		pixels = 0
+
+		#Percorre os pixels da celula
+		for i in range(int(coord_sup_esq[1]), int(coord_inf_dir[1])):
+			for j in range(int(coord_sup_esq[0]), int(coord_inf_dir[0])):
+				sum += gabGrey[i][j]
+				pixels += 1
+		
+		if sum/pixels < mediaCor_resposta:
+			mediaCor_resposta = sum/pixels
+			resposta = linha
+	
+	gabarito.append(resposta)
+
+''' Print do gabarito '''
+#print(gabarito)
 
 ''' Print linhas '''
 for line in verLines:
