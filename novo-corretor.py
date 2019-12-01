@@ -5,7 +5,7 @@ def window_is_open(windowname):
 
 	return True if cv2.getWindowProperty(windowname, cv2.WND_PROP_VISIBLE) >= 1 else False
 
-def imshow(windowname, img, show=True):
+def imshow(windowname, img, show=False):
 	if show:
 		cv2.namedWindow(windowname, flags=cv2.WINDOW_GUI_NORMAL)    # hides status, toolbar etc.
 		cv2.resizeWindow(windowname, img.shape[1], img.shape[0])
@@ -71,14 +71,14 @@ def is_valid_contour(c):
 	area = w*h - (w*h % 1000)
 
 	# TODO: pensar em outras restricoes
-	if area > 0 and w < 5*h and h < 5*w:
+	if area > 0 and w < 3*h and h < 3*w:
 		return True
 	else:
 		return False
 
 """===== GABARITO ====="""
 
-gabOrig = cv2.imread('imgs/nic.jpg'); imshow("original", gabOrig)
+gabOrig = cv2.imread('imgs/' + filename); imshow("original", gabOrig)
 gabGray = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", gabGray)
 # limiarizacao adaptativa devido a variacao de iluminacao na imagem
 gabThres = cv2.adaptiveThreshold(gabGray,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,41,2); imshow("threshold", gabThres)
@@ -107,12 +107,15 @@ contours, _ = cv2.findContours(gabTable, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
 # cria lista de areas (em degraus de 1000 unidades) dos contornos validos (i.e. nao muito pequenos e de lados nao muito distintos)
 contour_areas = []
+newContours = []
 for c in contours:
 	x, y, w, h = cv2.boundingRect(c)
 	area = w*h - (w*h % 1000)
 
 	if is_valid_contour(c):
 		contour_areas.append(area)
+		newContours.append(c)
+contours = newContours
 
 # detecta a moda das areas validas, que representa a area das celulas
 contour_mode = max(set(contour_areas), key=contour_areas.count)
