@@ -51,8 +51,117 @@ for line in lines:
 	else:
 		horLines.append(line)
 
-		
 
+
+
+# Mediana do angulo das linhas horizontais 
+angulos = []
+for line in horLines:
+	angulos.append(line[1])
+
+angulos.sort()
+mediana_hor = angulos[int( len(angulos)/2 )]
+
+# Mediana do angulo das linhas verticais
+angulos = []
+for line in verLines:
+	angulos.append(line[1])
+
+angulos.sort()
+mediana_ver = angulos[int( len(angulos)/2 )]
+
+# Eliminação de duplicados: se as linhas se intersectam dentro da imagem, são duplicadas (ou uma delas é gerada por outliers)
+altura, largura, _ = gabOrig.shape
+
+		# HORIZONTAIS
+horLinesAux = []
+for linha1 in horLines:
+	d1 = linha1[0]
+	t1 = linha1[1]
+	manter = True
+
+	for linha2 in horLines:
+		d2 = linha2[0]
+		t2 = linha2[1]
+
+		if t1 != t2: # Se nao forem paralelas 
+			A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
+			b = np.asmatrix([[d1],[d2]])
+			coord = np.linalg.inv(A) * b
+			coord.resize(2)
+
+			if 0 <= coord[0] <= largura and 0 <= coord[1] <= altura: #Se intersecao esta dentro da imagem
+				if abs(t1 - mediana_hor) > abs(t2 - mediana_hor):    #Se a linha estiver mais "longe" da mediana do que alguma outra linha, 
+					manter = False									 #eliminamos ela
+
+	if manter:
+		horLinesAux.append(linha1)
+
+horLines = horLinesAux
+
+
+		# VERTICAIS
+verLinesAux = []
+for linha1 in verLines:
+	d1 = linha1[0]
+	t1 = linha1[1]
+	manter = True
+
+	for linha2 in verLines:
+		d2 = linha2[0]
+		t2 = linha2[1]
+
+		if t1 != t2: # Se nao forem paralelas 
+			A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
+			b = np.asmatrix([[d1],[d2]])
+			coord = np.linalg.inv(A) * b
+			coord.resize(2)
+
+			if 0 <= coord[0] <= largura and 0 <= coord[1] <= altura: #Se intersecao esta dentro da imagem
+				if abs(t1 - mediana_ver) > abs(t2 - mediana_ver):    #Se a linha estiver mais "longe" da mediana do que alguma outra linha, 
+					manter = False									 #eliminamos ela
+
+	if manter:
+		verLinesAux.append(linha1)
+
+verLines = verLinesAux
+
+
+
+verLines.sort(key = lambda line: abs(line[0]))
+horLines.sort(key = lambda line: abs(line[0]))
+
+# Eliminacao de linhas muito proximas e da primeira linha e primera coluna (para nao ler as questoes e as alternativas)
+dist_min_etre_linhas = 15
+
+horLinesAux = []
+for i in range (1,len(horLines)):
+	if abs(horLines[i][0] - horLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
+		horLinesAux.append(horLines[i])
+horLines = horLinesAux
+
+verLinesAux = []
+for i in range (1,len(verLines)):
+	if abs(verLines[i][0] - verLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
+		verLinesAux.append(verLines[i])		
+verLines = verLinesAux
+
+# Identificacao da tabela (intersecoes entre linhas)
+tabela = []
+
+for linha in horLines:
+	intersecoes = []
+	d1 = linha[0]
+	t1 = linha[1]
+	for coluna in verLines:
+		d2 = coluna[0]
+		t2 = coluna[1]
+		A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
+		b = np.asmatrix([[d1],[d2]])
+		coord = np.linalg.inv(A) * b
+		coord.resize(2)
+		intersecoes.append(coord)
+	tabela.append(intersecoes)
 
 ''' Print intersecoes '''
 #for i in range(len(horLines)):			
@@ -86,7 +195,7 @@ for line in verLines:
 for line in horLines:
 	d = line[0]
 	theta = line[1]
-	
+
 	cos = np.cos(theta)
 	sin = np.sin(theta)
 
