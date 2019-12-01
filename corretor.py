@@ -69,14 +69,15 @@ def desenha_linhas(verLines, horLines):
 
 ''' GABARITO '''
 
-gabOrig = cv2.imread('imgs/gab-xis.jpg'); imshow("original", gabOrig)
-gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", gabGrey)
-gabCanny = cv2.Canny(gabGrey, 100, 200); imshow("canny", gabCanny)
-# _, gabThres = cv2.threshold(gabGrey, 100, 255, cv2.THRESH_BINARY_INV); imshow("threshold", gabThres)
-# gabThres = cv2.adaptiveThreshold(gabGrey,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,11,2); imshow("threshold", gabThres)
+gabOrig = cv2.imread('imgs/nic.jpg'); imshow("original", gabOrig)
+gabCanny = cv2.imread('imgs/tabelinha.png', cv2.IMREAD_GRAYSCALE); imshow("aa", gabCanny)
+# gabGray = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", gabGray)
+# gabCanny = cv2.Canny(gabGray, 100, 200); imshow("canny", gabCanny)
+# _, gabThres = cv2.threshold(gabGray, 100, 255, cv2.THRESH_BINARY_INV); imshow("threshold", gabThres)
+# gabThres = cv2.adaptiveThreshold(gabGray,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,11,2); imshow("threshold", gabThres)
 # gabThres = cv2.morphologyEx(gabThres, cv2.MORPH_CLOSE,  np.ones((3,3),np.uint8)); imshow("threshold", gabThres)
 
-lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 200)
+lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 500)
 horLines, verLines = separa_linhas(lines)
 desenha_linhas(verLines, horLines)
 
@@ -137,7 +138,7 @@ imshow("intersecoes", gabIntersecoes)
 # 		#Percorre os pixels da celula
 # 		for i in range(int(coord_sup_esq[1]), int(coord_inf_dir[1])):
 # 			for j in range(int(coord_sup_esq[0]), int(coord_inf_dir[0])):
-# 				sum += gabGrey[i][j]
+# 				sum += gabGray[i][j]
 # 				pixels += 1
 		
 # 		if sum/pixels < mediaCor_resposta:
