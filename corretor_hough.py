@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 
 def window_is_open(windowname):
+
 	return True if cv2.getWindowProperty(windowname, cv2.WND_PROP_VISIBLE) >= 1 else False
 
 def imshow(windowname, img, show=True):
@@ -23,25 +24,43 @@ def clearLines(lines):
 
 	return newLines
 
-''' GABARITO '''
+def infos_reta(d, theta):
+	cos = np.cos(theta)
+	sin = np.sin(theta)
+	
+	x0 = cos*d
+	y0 = sin*d
+	x1 = int(x0 + 10000*(-sin))
+	y1 = int(y0 + 10000*(cos))
+	x2 = int(x0 - 10000*(-sin))
+	y2 = int(y0 - 10000*(cos))
+	
+	a = -np.tan((np.pi/2)-theta)
+	b = y0 - a*x0
+	
+	return x1,y1,x2,y2,a,b
 
-gabOrig = cv2.imread('imgs/gab.jpg')
-gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY)
-gabCanny = cv2.Canny(gabGrey, 100, 200) # TODO: params
+def desenha_linhas(verLines, horLines):
+	# gabLinhas = np.zeros([gabOrig.shape[0], gabOrig.shape[1], 3], np.uint8)	
+	gabLinhas = gabOrig.copy()
+
+	for line in verLines:
+		x1,y1,x2,y2,_,_ = infos_reta(line[0], line[1])
+		cv2.line(gabLinhas, (x1,y1), (x2,y2), (255,255,0), 2, cv2.LINE_AA)
+
+	for line in horLines:
+		x1,y1,x2,y2,_,_ = infos_reta(line[0], line[1])
+		cv2.line(gabLinhas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
+
+	imshow("linhas", gabLinhas)
+
+gabOrig = cv2.imread('imgs/nic2.jpg'); imshow("original", gabOrig)
+gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", gabGrey)
+gabCanny = cv2.Canny(gabGrey, 100, 200); imshow("canny", gabCanny)
 # _, gabThres = cv2.threshold(gabGrey, 140, 255, cv2.THRESH_BINARY_INV)
 
-# gabThres = cv2.adaptiveThreshold(gabGrey,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,11,2)
-# gabCanny = cv2.morphologyEx(gabCanny, cv2.MORPH_CLOSE,  np.ones((7,7),np.uint8))
-
-imshow("canny", gabCanny)
-
-lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 150)	# TODO: params
+lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 150)
 lines = clearLines(lines)
-
-# lines[0] -> primeira linha
-# lines[i][0] -> d
-# lines[i][1] -> theta
-
 
 horLines = []
 verLines = []
@@ -50,15 +69,12 @@ for line in lines:
 		verLines.append(line)
 	else:
 		horLines.append(line)
-
-
-
+desenha_linhas(verLines, horLines)
 
 # Mediana do angulo das linhas horizontais 
 angulos = []
 for line in horLines:
 	angulos.append(line[1])
-
 angulos.sort()
 mediana_hor = angulos[int( len(angulos)/2 )]
 
@@ -66,7 +82,6 @@ mediana_hor = angulos[int( len(angulos)/2 )]
 angulos = []
 for line in verLines:
 	angulos.append(line[1])
-
 angulos.sort()
 mediana_ver = angulos[int( len(angulos)/2 )]
 
@@ -99,7 +114,6 @@ for linha1 in horLines:
 
 horLines = horLinesAux
 
-
 		# VERTICAIS
 verLinesAux = []
 for linha1 in verLines:
@@ -127,7 +141,7 @@ for linha1 in verLines:
 verLines = verLinesAux
 
 
-
+# ordena pelo d
 verLines.sort(key = lambda line: abs(line[0]))
 horLines.sort(key = lambda line: abs(line[0]))
 
@@ -169,9 +183,6 @@ for linha in horLines:
 #		coord = tabela[i][j] 
 #		cv2.circle(gabOrig, (coord[0], coord[1]), 5, (0,255,0))
 
-
-
-
 ''' Print linhas '''
 for line in verLines:
 	d = line[0]
@@ -212,8 +223,6 @@ for line in horLines:
 	cv2.line(gabOrig, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
 
 imshow("img", gabOrig)
-
-
 
 # Monta o gabarito
 gabarito = []
