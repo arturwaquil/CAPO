@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import copy
 
 def window_is_open(windowname):
 	return True if cv2.getWindowProperty(windowname, cv2.WND_PROP_VISIBLE) >= 1 else False
@@ -25,17 +26,13 @@ def clearLines(lines):
 
 ''' GABARITO '''
 
-gabOrig = cv2.imread('imgs/gab.jpg')
+gabOrig = cv2.imread('imgs/gab-bolinhas.jpg')
 gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY)
-gabCanny = cv2.Canny(gabGrey, 100, 200) # TODO: params
-# _, gabThres = cv2.threshold(gabGrey, 140, 255, cv2.THRESH_BINARY_INV)
-
-# gabThres = cv2.adaptiveThreshold(gabGrey,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,11,2)
-# gabCanny = cv2.morphologyEx(gabCanny, cv2.MORPH_CLOSE,  np.ones((7,7),np.uint8))
+gabCanny = cv2.Canny(gabGrey, 100, 200) 
 
 imshow("canny", gabCanny)
 
-lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 150)	# TODO: params
+lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 150)
 lines = clearLines(lines)
 
 # lines[0] -> primeira linha
@@ -46,26 +43,68 @@ lines = clearLines(lines)
 horLines = []
 verLines = []
 for line in lines:
-	if abs(line[1]) < np.pi/4:
+	if line[1] < np.pi/4 or line[1] > np.pi*3/4:
 		verLines.append(line)
 	else:
 		horLines.append(line)
 
+		
+''' Print linhas '''
+todas = copy.copy(gabOrig)
+for line in verLines:
+	d = line[0]
+	theta = line[1]
 
+	cos = np.cos(theta)
+	sin = np.sin(theta)
+
+	x0 = cos*d
+	y0 = sin*d
+	x1 = int(x0 + 10000*(-sin))
+	y1 = int(y0 + 10000*(cos))
+	x2 = int(x0 - 10000*(-sin))
+	y2 = int(y0 - 10000*(cos))
+
+	a = -np.tan((np.pi/2)-theta)
+	b = y0 - a*x0
+
+	cv2.line(todas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
+
+for line in horLines:
+	d = line[0]
+	theta = line[1]
+
+	cos = np.cos(theta)
+	sin = np.sin(theta)
+
+	x0 = cos*d
+	y0 = sin*d
+	x1 = int(x0 + 10000*(-sin))
+	y1 = int(y0 + 10000*(cos))
+	x2 = int(x0 - 10000*(-sin))
+	y2 = int(y0 - 10000*(cos))
+
+	a = -np.tan((np.pi/2)-theta)
+	b = y0 - a*x0
+
+	cv2.line(todas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
+
+imshow("todas", todas)
+		
 
 
 # Mediana do angulo das linhas horizontais 
 angulos = []
-for line in horLines:
-	angulos.append(line[1])
+for line in range(int(0.3*len(horLines))):
+	angulos.append(horLines[line][1])
 
 angulos.sort()
 mediana_hor = angulos[int( len(angulos)/2 )]
 
 # Mediana do angulo das linhas verticais
 angulos = []
-for line in verLines:
-	angulos.append(line[1])
+for line in range(int(0.3*len(verLines))):
+	angulos.append(verLines[line][1])
 
 angulos.sort()
 mediana_ver = angulos[int( len(angulos)/2 )]
@@ -131,20 +170,51 @@ verLines = verLinesAux
 verLines.sort(key = lambda line: abs(line[0]))
 horLines.sort(key = lambda line: abs(line[0]))
 
-# Eliminacao de linhas muito proximas e da primeira linha e primera coluna (para nao ler as questoes e as alternativas)
-dist_min_etre_linhas = 15
+# Eliminacao de linhas muito proximas 
+dist_min_etre_linhas = 25
+	
+	# Hor
+horLinesManter = []
+for i in range(len (horLines)):
+	horLinesManter.append(True)
 
-horLinesAux = []
-for i in range (1,len(horLines)):
-	if abs(horLines[i][0] - horLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
-		horLinesAux.append(horLines[i])
-horLines = horLinesAux
+for line1 in range(len(horLines)):
+	if horLinesManter[line1]:	# Se a linha ja nao foi eliminada
+		for line2 in range(line1+1, len(horLines)):
+			if abs(horLines[line1][0] - horLines[line2][0]) < dist_min_etre_linhas:    # Se diferenca for menor que a dist_min, 
+				horLinesManter[line2] = False												#elimina a linha com menos votos
 
-verLinesAux = []
-for i in range (1,len(verLines)):
-	if abs(verLines[i][0] - verLines[i-1][0]) > dist_min_etre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
-		verLinesAux.append(verLines[i])		
-verLines = verLinesAux
+removidos = 0
+for i in range(len(horLinesManter)):
+	if not horLinesManter[i]:   # Se false, isto eh, nao queremos manter a linha
+		del(horLines[i-removidos]) #Retiramos a linha da lista 
+		removidos += 1
+			
+	# Vert
+verLinesManter = []
+for i in range(len (verLines)):
+	verLinesManter.append(True)
+
+for line1 in range(len(verLines)):
+	if verLinesManter[line1]:	# Se a linha ja nao foi eliminada
+		for line2 in range(line1+1, len(verLines)):
+			if abs(verLines[line1][0] - verLines[line2][0]) < dist_min_etre_linhas:    # Se diferenca for menor que a dist_min, 
+				verLinesManter[line2] = False												#elimina a linha com menos votos
+
+removidos = 0
+for i in range(len(verLinesManter)):
+	if not verLinesManter[i]:   # Se false, isto eh, nao queremos manter a linha
+		del(verLines[i-removidos]) #Retiramos a linha da lista 
+		removidos += 1
+			
+			
+			
+# Eliminacao da primeira linha e primera coluna (para nao ler as questoes e as alternativas)
+verLines.sort(key = lambda line: abs(line[0]))
+horLines.sort(key = lambda line: abs(line[0]))
+verLines = verLines[1:]
+horLines = horLines[1:]
+
 
 # Identificacao da tabela (intersecoes entre linhas)
 tabela = []
@@ -219,22 +289,21 @@ imshow("img", gabOrig)
 gabarito = []
 for coluna in range(len(verLines)-1):
 	resposta = -1
-	mediaCor_resposta = 255
+	qtd_resposta = 0
 
 	for linha in range(len(horLines)-1):
 		coord_sup_esq = tabela[linha][coluna]
 		coord_inf_dir = tabela[linha+1][coluna+1]
 		sum = 0
-		pixels = 0
 
 		#Percorre os pixels da celula
 		for i in range(int(coord_sup_esq[1]), int(coord_inf_dir[1])):
 			for j in range(int(coord_sup_esq[0]), int(coord_inf_dir[0])):
-				sum += gabGrey[i][j]
-				pixels += 1
+				if(gabCanny[i][j] == 255):
+					sum += 1
 
-		if sum/pixels < mediaCor_resposta:
-			mediaCor_resposta = sum/pixels
+		if sum > qtd_resposta:
+			qtd_resposta = sum
 			resposta = linha
 
 	gabarito.append(resposta)
