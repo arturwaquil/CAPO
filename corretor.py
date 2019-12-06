@@ -1,11 +1,13 @@
 import numpy as np
 import cv2
+import sys, os
+
 
 def window_is_open(windowname):
 
 	return True if cv2.getWindowProperty(windowname, cv2.WND_PROP_VISIBLE) >= 1 else False
 
-def imshow(windowname, img, show=True):
+def imshow(windowname, img, show=False):
 	if show:
 		cv2.namedWindow(windowname, flags=cv2.WINDOW_GUI_NORMAL)    # hides status, toolbar etc.
 		cv2.resizeWindow(windowname, img.shape[1], img.shape[0])
@@ -17,136 +19,224 @@ def imshow(windowname, img, show=True):
 
 		cv2.destroyAllWindows()
 
-def separa_linhas(lines):
-	newLines = []
-	for line in lines:
-		newLines.append(line[0])
+def is_valid_contour(c):
+	x, y, w, h = cv2.boundingRect(c)
+	area = w*h - (w*h % 1000)
 
-	horLines = []
-	verLines = []
-	for line in newLines:
-		theta_deg = 180*line[1]/np.pi
-		if theta_deg < 10 or theta_deg > 170:
-			verLines.append(line)
-		elif theta_deg > 80 and theta_deg < 100:
-			horLines.append(line)
+	if area > 0 and w < 3*h and h < 3*w:
+		return True
+	else:
+		return False
 
-	verLines.sort(key = lambda line: abs(line[0]))
-	horLines.sort(key = lambda line: abs(line[0]))
+def desenha_contornos(contours, imgOrig, cor=(255,0,0)):
+	img = imgOrig.copy()
+	for c in contours:
+		x, y, w, h = cv2.boundingRect(c)
+		cv2.rectangle(img, (x,y), (x+w,y+h), cor, 3)
+	return img
 
-	return horLines, verLines
+def dimensoes_tabela(contours):
 
-def infos_reta(d, theta):
-	cos = np.cos(theta)
-	sin = np.sin(theta)
-	
-	x0 = cos*d
-	y0 = sin*d
-	x1 = int(x0 + 10000*(-sin))
-	y1 = int(y0 + 10000*(cos))
-	x2 = int(x0 - 10000*(-sin))
-	y2 = int(y0 - 10000*(cos))
-	
-	a = -np.tan((np.pi/2)-theta)
-	b = y0 - a*x0
-	
-	return x1,y1,x2,y2,a,b
+	temp = contours.copy()
+	# ordena pelo x
+	temp.sort(key=lambda c:cv2.boundingRect(c)[0])
 
-def desenha_linhas(verLines, horLines):
-	# gabLinhas = np.zeros([gabOrig.shape[0], gabOrig.shape[1], 3], np.uint8)	
-	gabLinhas = gabOrig.copy()
+	leftmost = temp[0]
+	x_leftmost, _, w_leftmost, _ = cv2.boundingRect(leftmost)
 
-	for line in verLines:
-		x1,y1,x2,y2,_,_ = infos_reta(line[0], line[1])
-		cv2.line(gabLinhas, (x1,y1), (x2,y2), (255,255,0), 2, cv2.LINE_AA)
+	num_linhas = 0
+	for c in contours:
+		x,_,_,_ = cv2.boundingRect(c)
+		if x < x_leftmost + w_leftmost/2:
+			num_linhas += 1
 
-	for line in horLines:
-		x1,y1,x2,y2,_,_ = infos_reta(line[0], line[1])
-		cv2.line(gabLinhas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
+	num_colunas = int(len(contours)/num_linhas)
 
-	imshow("linhas", gabLinhas)
+	return num_linhas, num_colunas
 
 
-''' GABARITO '''
+def detecta_contornos(imgOrig):
+	imshow("original", imgOrig)
+	imgGray = cv2.cvtColor(imgOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", imgGray)
+	# limiarizacao adaptativa devido a variacao de iluminacao na imagem
+	imgThres = cv2.adaptiveThreshold(imgGray,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,41,2); imshow("threshold", imgThres)
 
-gabOrig = cv2.imread('imgs/nic.jpg'); imshow("original", gabOrig)
-gabCanny = cv2.imread('imgs/tabelinha.png', cv2.IMREAD_GRAYSCALE); imshow("aa", gabCanny)
-# gabGray = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY); imshow("grayscale", gabGray)
-# gabCanny = cv2.Canny(gabGray, 100, 200); imshow("canny", gabCanny)
-# _, gabThres = cv2.threshold(gabGray, 100, 255, cv2.THRESH_BINARY_INV); imshow("threshold", gabThres)
-# gabThres = cv2.adaptiveThreshold(gabGray,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,11,2); imshow("threshold", gabThres)
-# gabThres = cv2.morphologyEx(gabThres, cv2.MORPH_CLOSE,  np.ones((3,3),np.uint8)); imshow("threshold", gabThres)
+	vert_kernel_length = 5#imgThres.shape[0]//50
+	hori_kernel_length = 5#imgThres.shape[1]//50
 
-lines = cv2.HoughLines(gabCanny, 1, np.pi/180, 500)
-horLines, verLines = separa_linhas(lines)
-desenha_linhas(verLines, horLines)
+	# operacao morfologica para detectar retas verticais na imagem, usando um kernel (1 x vert_kernel_length)
+	vert_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vert_kernel_length))
+	temp = cv2.erode(imgThres, vert_kernel, iterations=3)
+	imgVertLines = cv2.dilate(temp, vert_kernel, iterations=3)
+	imshow("vert", imgVertLines)
+	cv2.imwrite('vert.jpg', imgVertLines)
 
-# Eliminacao de linhas duplicadas e da primeira linha e primera coluna (para nao ler as questoes e as alternativas)
-dist_min_entre_linhas = 25
+	# operacao morfologica para detectar retas horizontais na imagem, usando um kernel (hori_kernel_length x 1)
+	hori_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (hori_kernel_length, 1))
+	temp = cv2.erode(imgThres, hori_kernel, iterations=3)
+	imgHoriLines = cv2.dilate(temp, hori_kernel, iterations=3)
+	imshow("hori", imgHoriLines)
+	cv2.imwrite('hori.jpg', imgHoriLines)
 
-horLinesAux = []
-for i in range (1,len(horLines)):
-	if abs(horLines[i][0] - horLines[i-1][0]) > dist_min_entre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
-		horLinesAux.append(horLines[i])
-horLines = horLinesAux
+	# junta as verticais e horizontais
+	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+	imgTable = imgVertLines + imgHoriLines
+	imgTable = cv2.erode(~imgTable, kernel, iterations=2)
+	_, imgTable = cv2.threshold(imgTable, 128, 255, cv2.THRESH_BINARY_INV); imshow("table", imgTable)
+	cv2.imwrite('table.jpg', imgTable)
+
+	contours, _ = cv2.findContours(imgTable, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+	# imprime os contornos detectados na imagem
+	imgFirstContours = desenha_contornos(contours, imgOrig)
+	imshow("first contours", imgFirstContours)
+
+	# elimina contornos invalidos (i.e. muito pequenos ou de lados muito distintos)
+	tempContours = []
+	for c in contours:
+		if is_valid_contour(c):
+			tempContours.append(c)
+	contours = tempContours
+
+	# cria lista de areas (em degraus de 1000 unidades) dos contornos
+	contour_areas = []
+	for c in contours:
+		x, y, w, h = cv2.boundingRect(c)
+		area = w*h - (w*h % 1000)
+		contour_areas.append(area)
+
+	# detecta a moda das areas, que representa a area das celulas da tabela
+	contour_mode = max(set(contour_areas), key=contour_areas.count)
+
+	# elimina contornos com tamanhos muito diferentes da moda
+	tempContours = []
+	for c in contours:
+		x, y, w, h = cv2.boundingRect(c)
+		if w*h < 2*contour_mode and w*h > 2*contour_mode/3:
+			tempContours.append(c)
+	contours = tempContours
+
+	# imprime os contornos das celulas na imagem
+	imgContours = desenha_contornos(contours, imgOrig)
+	imshow("contours", imgContours)
+
+	return imgContours, contours
+
+def monta_tabela(contours):
+
+	temp = contours.copy()
+	# ordena pelo x
+	temp.sort(key=lambda c:cv2.boundingRect(c)[0])
+
+	leftmost = temp[0]
+	x_leftmost, _, w_leftmost, _ = cv2.boundingRect(leftmost)
+
+	num_linhas, num_colunas = dimensoes_tabela(contours)
+
+	tabela = []
+	for i in range(num_colunas):
+		col = temp[:6]
+		# ordena pelo y
+		col.sort(key=lambda c:cv2.boundingRect(c)[1])
+		col = col[1:]
+		temp = temp[6:]
+		tabela.append(col)
+	tabela = tabela[1:]
+
+	return tabela
+
+def detecta_respostas(filename):
+
+	img = cv2.imread(filename)
+	_, contours = detecta_contornos(img)
+
+	imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+	imgCanny = cv2.Canny(imgGray, 100, 200); imshow("canny", imgCanny)
+
+	tabela = monta_tabela(contours)
+	num_linhas = len(tabela[0])
+	num_colunas = len(tabela)
+
+	respostas = []
+	for coluna in range(num_colunas):
+		resposta = -1
+		qtd_brancos_resposta = 0
+
+		for linha in range(num_linhas):
+			celula = tabela[coluna][linha]
+			x, y, w, h = cv2.boundingRect(celula)
+			sum = 0
+
+			#Percorre os pixels da celula
+			for i in range(y, y+h):
+				for j in range(x, x+w):
+					if imgCanny[i][j] == 255:
+						sum += 1
+
+			if sum > qtd_brancos_resposta:
+				qtd_brancos_resposta = sum
+				resposta = linha
+
+		respostas.append(resposta)
+
+	return respostas, tabela
+
+def marca_respostas(gabarito, resposta, tabela, img):
+	num_linhas = len(tabela[0])
+	num_colunas = len(tabela)
+
+	corretas = []
+	erradas = []
+	for questao in range(len(resposta)):
+		alt = resposta[questao]
+		if gabarito[questao] == resposta[questao]:
+			corretas.append(tabela[questao][alt])
+		else:
+			erradas.append(tabela[questao][alt])
+	imgRespostas = desenha_contornos(corretas, img, (0,255,0))
+	imgRespostas = desenha_contornos(erradas, imgRespostas, (0,0,255))
+	imshow("respostas", imgRespostas)
+	return imgRespostas
+
+
+def testa(filename):
+	try:
+		gabarito, _ = detecta_respostas(filename)
+		print(gabarito)
+	except:
+		print('erro no teste do arquivo ' + filename)
+
+def corrige_alunos():
+
+	# numero de alunos eh o numero de arquivos na pasta de provas
+	for _, _, files in os.walk('teste/provas/'):
+		num_alunos = len(files)
+
+	dir_provas = 'teste/provas/'
+	dir_correcoes = 'teste/correcoes/'
+	extensao = 'jpg'
+
+	gabarito, _ = detecta_respostas('teste/gabarito.' + extensao)
+
+	for aluno in range(num_alunos):
+		nome = 'aluno' + str(aluno+1) + '.' + extensao
+		print('\nAluno ' + str(aluno+1) + ':')
 		
-verLinesAux = []
-for i in range (1,len(verLines)):
-	if abs(verLines[i][0] - verLines[i-1][0]) > dist_min_entre_linhas:    # Se diferenca for maior que a dist_min, mantem a linha
-		verLinesAux.append(verLines[i])		
-verLines = verLinesAux
-
-desenha_linhas(verLines, horLines)
+		resposta, tabela = detecta_respostas(dir_provas+nome)
 		
-# Identificacao da tabela (intersecoes entre linhas)
-tabela = []
-
-for linha in horLines:
-	intersecoes = []
-	d1 = linha[0]
-	t1 = linha[1]
-	for coluna in verLines:
-		d2 = coluna[0]
-		t2 = coluna[1]
-		A = np.asmatrix([[np.cos(t1), np.sin(t1)],[np.cos(t2), np.sin(t2)]])
-		b = np.asmatrix([[d1],[d2]])
-		coord = np.linalg.inv(A) * b
-		coord.resize(2)
-		intersecoes.append(coord)
-	tabela.append(intersecoes)
-
-''' Print intersecoes '''
-gabIntersecoes = gabOrig.copy()
-for i in range(len(horLines)):			
-	for j in range(len(verLines)):
-		coord = tabela[i][j] 
-		cv2.circle(gabIntersecoes, (coord[0], coord[1]), 5, (0,255,0))
-imshow("intersecoes", gabIntersecoes)
-
-# # Monta o gabarito
-# gabarito = []
-# for coluna in range(len(verLines)-1):
-# 	resposta = -1
-# 	mediaCor_resposta = 255
-
-# 	for linha in range(len(horLines)-1):
-# 		coord_sup_esq = tabela[linha][coluna]
-# 		coord_inf_dir = tabela[linha+1][coluna+1]
-# 		sum = 0
-# 		pixels = 0
-
-# 		#Percorre os pixels da celula
-# 		for i in range(int(coord_sup_esq[1]), int(coord_inf_dir[1])):
-# 			for j in range(int(coord_sup_esq[0]), int(coord_inf_dir[0])):
-# 				sum += gabGray[i][j]
-# 				pixels += 1
+		acertos = 0
+		for questao in range(len(resposta)):
+			if gabarito[questao] == resposta[questao]:
+				resultado = 'correto'
+				acertos += 1
+			else:
+				resultado = 'errado'
+			print('Questao ' + str(questao+1) + ': ' + resultado)	
 		
-# 		if sum/pixels < mediaCor_resposta:
-# 			mediaCor_resposta = sum/pixels
-# 			resposta = linha
-	
-# 	gabarito.append(resposta)
+		print('Nota: ' + str(acertos) + '/' + str(len(resposta)))
 
-# ''' Print do gabarito '''
-# print(gabarito)
+		imgRespostas = marca_respostas(gabarito, resposta, tabela, cv2.imread(dir_provas+nome))
+		cv2.imwrite(dir_correcoes + nome, imgRespostas)
 
+if __name__ == "__main__":
+	corrige_alunos()
