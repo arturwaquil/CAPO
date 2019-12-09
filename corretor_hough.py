@@ -26,7 +26,7 @@ def clearLines(lines):
 
 ''' GABARITO '''
 
-gabOrig = cv2.imread('imgs/gab-bolinhas.jpg')
+gabOrig = cv2.imread('imgs/teste.png')
 gabGrey = cv2.cvtColor(gabOrig, cv2.COLOR_BGR2GRAY)
 gabCanny = cv2.Canny(gabGrey, 100, 200) 
 
@@ -47,50 +47,6 @@ for line in lines:
 		verLines.append(line)
 	else:
 		horLines.append(line)
-
-		
-''' Print linhas '''
-todas = copy.copy(gabOrig)
-for line in verLines:
-	d = line[0]
-	theta = line[1]
-
-	cos = np.cos(theta)
-	sin = np.sin(theta)
-
-	x0 = cos*d
-	y0 = sin*d
-	x1 = int(x0 + 10000*(-sin))
-	y1 = int(y0 + 10000*(cos))
-	x2 = int(x0 - 10000*(-sin))
-	y2 = int(y0 - 10000*(cos))
-
-	a = -np.tan((np.pi/2)-theta)
-	b = y0 - a*x0
-
-	cv2.line(todas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
-
-for line in horLines:
-	d = line[0]
-	theta = line[1]
-
-	cos = np.cos(theta)
-	sin = np.sin(theta)
-
-	x0 = cos*d
-	y0 = sin*d
-	x1 = int(x0 + 10000*(-sin))
-	y1 = int(y0 + 10000*(cos))
-	x2 = int(x0 - 10000*(-sin))
-	y2 = int(y0 - 10000*(cos))
-
-	a = -np.tan((np.pi/2)-theta)
-	b = y0 - a*x0
-
-	cv2.line(todas, (x1,y1), (x2,y2), (255,0,0), 2, cv2.LINE_AA)
-
-imshow("todas", todas)
-		
 
 
 # Mediana do angulo das linhas horizontais 
@@ -232,15 +188,6 @@ for linha in horLines:
 		coord.resize(2)
 		intersecoes.append(coord)
 	tabela.append(intersecoes)
-
-''' Print intersecoes '''
-#for i in range(len(horLines)):			
-#	for j in range(len(verLines)):
-#		coord = tabela[i][j] 
-#		cv2.circle(gabOrig, (coord[0], coord[1]), 5, (0,255,0))
-
-
-
 
 ''' Print linhas '''
 for line in verLines:
