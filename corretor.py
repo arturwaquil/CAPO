@@ -2,12 +2,16 @@ import numpy as np
 import cv2
 import sys, os
 
+save = True
 
 def window_is_open(windowname):
 
 	return True if cv2.getWindowProperty(windowname, cv2.WND_PROP_VISIBLE) >= 1 else False
 
 def imshow(windowname, img, show=False):
+	if save:
+		cv2.imwrite(windowname + '.jpg', img)
+
 	if show:
 		cv2.namedWindow(windowname, flags=cv2.WINDOW_GUI_NORMAL)    # hides status, toolbar etc.
 		cv2.resizeWindow(windowname, img.shape[1], img.shape[0])
@@ -28,12 +32,10 @@ def is_valid_contour(c):
 	else:
 		return False
 
-def desenha_contornos(contours, imgOrig, cor=(255,0,0)):
-	img = imgOrig.copy()
+def desenha_contornos_retangulares(contours, img, cor=(255,0,0)):
 	for c in contours:
 		x, y, w, h = cv2.boundingRect(c)
 		cv2.rectangle(img, (x,y), (x+w,y+h), cor, 3)
-	return img
 
 def dimensoes_tabela(contours):
 
@@ -61,35 +63,33 @@ def detecta_contornos(imgOrig):
 	# limiarizacao adaptativa devido a variacao de iluminacao na imagem
 	imgThres = cv2.adaptiveThreshold(imgGray,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY_INV,41,2); imshow("threshold", imgThres)
 
-	vert_kernel_length = 5#imgThres.shape[0]//50
-	hori_kernel_length = 5#imgThres.shape[1]//50
+	kernel_length = 5
 
-	# operacao morfologica para detectar retas verticais na imagem, usando um kernel (1 x vert_kernel_length)
-	vert_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vert_kernel_length))
+	# operacao morfologica para detectar retas verticais na imagem, usando um kernel (1 x kernel_length)
+	vert_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, kernel_length))
 	temp = cv2.erode(imgThres, vert_kernel, iterations=3)
 	imgVertLines = cv2.dilate(temp, vert_kernel, iterations=3)
-	imshow("vert", imgVertLines)
-	cv2.imwrite('vert.jpg', imgVertLines)
+	imshow("vertical_lines", imgVertLines)
 
-	# operacao morfologica para detectar retas horizontais na imagem, usando um kernel (hori_kernel_length x 1)
-	hori_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (hori_kernel_length, 1))
+	# operacao morfologica para detectar retas horizontais na imagem, usando um kernel (kernel_length x 1)
+	hori_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_length, 1))
 	temp = cv2.erode(imgThres, hori_kernel, iterations=3)
 	imgHoriLines = cv2.dilate(temp, hori_kernel, iterations=3)
-	imshow("hori", imgHoriLines)
-	cv2.imwrite('hori.jpg', imgHoriLines)
+	imshow("horizontal_lines", imgHoriLines)
 
 	# junta as verticais e horizontais
 	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
 	imgTable = imgVertLines + imgHoriLines
 	imgTable = cv2.erode(~imgTable, kernel, iterations=2)
-	_, imgTable = cv2.threshold(imgTable, 128, 255, cv2.THRESH_BINARY_INV); imshow("table", imgTable)
-	cv2.imwrite('table.jpg', imgTable)
+	_, imgTable = cv2.threshold(imgTable, 128, 255, cv2.THRESH_BINARY_INV)
+	imshow("table", imgTable)
 
 	contours, _ = cv2.findContours(imgTable, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
 	# imprime os contornos detectados na imagem
-	imgFirstContours = desenha_contornos(contours, imgOrig)
-	imshow("first contours", imgFirstContours)
+	imgFirstContours = imgOrig.copy()
+	cv2.drawContours(imgFirstContours, contours, -1, (255,0,0), 3)
+	imshow("first_contours", imgFirstContours)
 
 	# elimina contornos invalidos (i.e. muito pequenos ou de lados muito distintos)
 	tempContours = []
@@ -117,7 +117,8 @@ def detecta_contornos(imgOrig):
 	contours = tempContours
 
 	# imprime os contornos das celulas na imagem
-	imgContours = desenha_contornos(contours, imgOrig)
+	imgContours = imgOrig.copy()
+	cv2.drawContours(imgContours, contours, -1, (255,0,0), 3)
 	imshow("contours", imgContours)
 
 	return imgContours, contours
@@ -135,27 +136,28 @@ def monta_tabela(contours):
 
 	tabela = []
 	for i in range(num_colunas):
-		col = temp[:6]
+		col = temp[:num_linhas]
 		# ordena pelo y
 		col.sort(key=lambda c:cv2.boundingRect(c)[1])
 		col = col[1:]
-		temp = temp[6:]
+		temp = temp[num_linhas:]
 		tabela.append(col)
 	tabela = tabela[1:]
 
 	return tabela
+
 
 def detecta_respostas(filename):
 
 	img = cv2.imread(filename)
 	_, contours = detecta_contornos(img)
 
-	imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-	imgCanny = cv2.Canny(imgGray, 100, 200); imshow("canny", imgCanny)
-
 	tabela = monta_tabela(contours)
 	num_linhas = len(tabela[0])
 	num_colunas = len(tabela)
+
+	imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+	imgCanny = cv2.Canny(imgGray, 100, 200); imshow("canny", imgCanny)
 
 	respostas = []
 	for coluna in range(num_colunas):
@@ -181,62 +183,98 @@ def detecta_respostas(filename):
 
 	return respostas, tabela
 
-def marca_respostas(gabarito, resposta, tabela, img):
+def marca_respostas(gabarito, respostas, tabela, img):
 	num_linhas = len(tabela[0])
 	num_colunas = len(tabela)
 
 	corretas = []
 	erradas = []
-	for questao in range(len(resposta)):
-		alt = resposta[questao]
-		if gabarito[questao] == resposta[questao]:
+	for questao in range(len(respostas)):
+		alt = respostas[questao]
+		if gabarito[questao] == respostas[questao]:
 			corretas.append(tabela[questao][alt])
 		else:
 			erradas.append(tabela[questao][alt])
-	imgRespostas = desenha_contornos(corretas, img, (0,255,0))
-	imgRespostas = desenha_contornos(erradas, imgRespostas, (0,0,255))
+
+	imgRespostas = img.copy()
+	desenha_contornos_retangulares(corretas, imgRespostas, (0,255,0))
+	desenha_contornos_retangulares(erradas, imgRespostas, (0,0,255))
 	imshow("respostas", imgRespostas)
 	return imgRespostas
 
 
 def testa(filename):
 	try:
-		gabarito, _ = detecta_respostas(filename)
-		print(gabarito)
+		gabarito, tabela = detecta_respostas(filename)
+		imgRespostas = marca_respostas(gabarito, gabarito, tabela, cv2.imread(filename))
 	except:
 		print('erro no teste do arquivo ' + filename)
 
-def corrige_alunos():
+def corrige_alunos(gab_name, dir_provas):
 
-	# numero de alunos eh o numero de arquivos na pasta de provas
-	for _, _, files in os.walk('teste/provas/'):
-		num_alunos = len(files)
+	try:
+		os.chdir(dir_provas)
+		cwd = os.getcwd()
+	except:
+		exit('erro na abertura do diretorio de provas')
 
-	dir_provas = 'teste/provas/'
-	dir_correcoes = 'teste/correcoes/'
-	extensao = 'jpg'
+	# cria lista das imagens a serem corrigidas
+	entries = os.scandir()
+	files = []
+	[ files.append(e.name) for e in entries if e.name != gab_name and e.is_file() ]
 
-	gabarito, _ = detecta_respostas('teste/gabarito.' + extensao)
+	# detecta as respostas para a imagem do gabarito
+	try:
+		if save:
+			dir_gab = os.path.splitext(gab_name)[0]
+			if not os.path.exists(dir_gab):
+				os.mkdir(dir_gab)
+			os.chdir(dir_gab)
+			gab_name = '../' + gab_name
 
-	for aluno in range(num_alunos):
-		nome = 'aluno' + str(aluno+1) + '.' + extensao
-		print('\nAluno ' + str(aluno+1) + ':')
-		
-		resposta, tabela = detecta_respostas(dir_provas+nome)
-		
-		acertos = 0
-		for questao in range(len(resposta)):
-			if gabarito[questao] == resposta[questao]:
-				resultado = 'correto'
-				acertos += 1
-			else:
-				resultado = 'errado'
-			print('Questao ' + str(questao+1) + ': ' + resultado)	
-		
-		print('Nota: ' + str(acertos) + '/' + str(len(resposta)))
+		gabarito, _ = detecta_respostas(gab_name)
 
-		imgRespostas = marca_respostas(gabarito, resposta, tabela, cv2.imread(dir_provas+nome))
-		cv2.imwrite(dir_correcoes + nome, imgRespostas)
+		if save: os.chdir('..')
+	except:
+		exit('erro na deteccao do gabarito')
+	
+	# roda o corretor para toda imagem no diretorio, exceto o gabarito
+	for file in files:
+
+		try:
+			print('\nAluno: ' + file)
+
+			# cria diretorio onde serao salvas as imagens do aluno
+			if save:
+				dir_aluno = os.path.splitext(file)[0]
+				if not os.path.exists(dir_aluno):
+					os.mkdir(dir_aluno)
+				os.chdir(dir_aluno)
+				file = '../' + file
+
+			respostas, tabela = detecta_respostas(file)
+			
+			acertos = 0
+			for questao in range(len(respostas)):
+				if gabarito[questao] == respostas[questao]:
+					resultado = 'correto'
+					acertos += 1
+				else:
+					resultado = 'errado'
+				print('Questao ' + str(questao+1) + ':\t' + resultado)	
+			
+			print('Nota: ' + str(acertos) + '/' + str(len(respostas)))
+
+			imgRespostas = marca_respostas(gabarito, respostas, tabela, cv2.imread(file))
+
+			if save: os.chdir('..')
+
+		except:
+			print('erro no arquivo ' + file)
+			if os.getcwd() != cwd:
+				os.chdir(cwd)
+			continue
 
 if __name__ == "__main__":
-	corrige_alunos()
+	corrige_alunos('gabarito.jpg', 'imgs/')
+	# testa('imgs/gabarito.jpg')
